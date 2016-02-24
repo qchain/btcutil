@@ -1,13 +1,13 @@
 btcutil
 =======
 
-[![Build Status](http://img.shields.io/travis/btcsuite/btcutil.svg)]
-(https://travis-ci.org/btcsuite/btcutil) [![Coverage Status]
-(http://img.shields.io/coveralls/btcsuite/btcutil.svg)]
-(https://coveralls.io/r/btcsuite/btcutil?branch=master) [![ISC License]
+[![Build Status](http://img.shields.io/travis/qchain/btcutil.svg)]
+(https://travis-ci.org/qchain/btcutil) [![Coverage Status]
+(http://img.shields.io/coveralls/qchain/btcutil.svg)]
+(https://coveralls.io/r/qchain/btcutil?branch=master) [![ISC License]
 (http://img.shields.io/badge/license-ISC-blue.svg)](http://copyfree.org)
 [![GoDoc](http://img.shields.io/badge/godoc-reference-blue.svg)]
-(http://godoc.org/github.com/btcsuite/btcutil)
+(http://godoc.org/github.com/qchain/btcutil)
 
 Package btcutil provides bitcoin-specific convenience functions and types.
 A comprehensive suite of tests is provided to ensure proper functionality.  See
@@ -24,13 +24,13 @@ provided.
 ## Installation and Updating
 
 ```bash
-$ go get -u github.com/btcsuite/btcutil
+$ go get -u github.com/qchain/btcutil
 ```
 
 ## GPG Verification Key
 
 All official release tags are signed by Conformal so users can ensure the code
-has not been tampered with and is coming from the btcsuite developers.  To
+has not been tampered with and is coming from the qchain developers.  To
 verify the signature perform the following:
 
 - Download the public key from the Conformal website at
