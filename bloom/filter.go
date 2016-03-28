@@ -5,11 +5,9 @@
 package bloom
 
 import (
-	"encoding/binary"
 	"math"
 	"sync"
 
-	"github.com/qchain/btcd/txscript"
 	"github.com/qchain/btcd/wire"
 	"github.com/qchain/btcutil"
 )
@@ -160,30 +158,6 @@ func (bf *Filter) Matches(data []byte) bool {
 	return match
 }
 
-// matchesOutPoint returns true if the bloom filter might contain the passed
-// outpoint and false if it definitely does not.
-//
-// This function MUST be called with the filter lock held.
-func (bf *Filter) matchesOutPoint(outpoint *wire.OutPoint) bool {
-	// Serialize
-	var buf [wire.HashSize + 4]byte
-	copy(buf[:], outpoint.Hash.Bytes())
-	binary.LittleEndian.PutUint32(buf[wire.HashSize:], outpoint.Index)
-
-	return bf.matches(buf[:])
-}
-
-// MatchesOutPoint returns true if the bloom filter might contain the passed
-// outpoint and false if it definitely does not.
-//
-// This function is safe for concurrent access.
-func (bf *Filter) MatchesOutPoint(outpoint *wire.OutPoint) bool {
-	bf.mtx.Lock()
-	match := bf.matchesOutPoint(outpoint)
-	bf.mtx.Unlock()
-	return match
-}
-
 // add adds the passed byte slice to the bloom filter.
 //
 // This function MUST be called with the filter lock held.
@@ -223,46 +197,6 @@ func (bf *Filter) AddShaHash(sha *wire.ShaHash) {
 	bf.mtx.Unlock()
 }
 
-// addOutPoint adds the passed transaction outpoint to the bloom filter.
-//
-// This function MUST be called with the filter lock held.
-func (bf *Filter) addOutPoint(outpoint *wire.OutPoint) {
-	// Serialize
-	var buf [wire.HashSize + 4]byte
-	copy(buf[:], outpoint.Hash.Bytes())
-	binary.LittleEndian.PutUint32(buf[wire.HashSize:], outpoint.Index)
-
-	bf.add(buf[:])
-}
-
-// AddOutPoint adds the passed transaction outpoint to the bloom filter.
-//
-// This function is safe for concurrent access.
-func (bf *Filter) AddOutPoint(outpoint *wire.OutPoint) {
-	bf.mtx.Lock()
-	bf.addOutPoint(outpoint)
-	bf.mtx.Unlock()
-}
-
-// maybeAddOutpoint potentially adds the passed outpoint to the bloom filter
-// depending on the bloom update flags and the type of the passed public key
-// script.
-//
-// This function MUST be called with the filter lock held.
-func (bf *Filter) maybeAddOutpoint(pkScript []byte, outHash *wire.ShaHash, outIdx uint32) {
-	switch bf.msgFilterLoad.Flags {
-	case wire.BloomUpdateAll:
-		outpoint := wire.NewOutPoint(outHash, outIdx)
-		bf.addOutPoint(outpoint)
-	case wire.BloomUpdateP2PubkeyOnly:
-		class := txscript.GetScriptClass(pkScript)
-		if class == txscript.PubKeyTy || class == txscript.MultiSigTy {
-			outpoint := wire.NewOutPoint(outHash, outIdx)
-			bf.addOutPoint(outpoint)
-		}
-	}
-}
-
 // matchTxAndUpdate returns true if the bloom filter matches data within the
 // passed transaction, otherwise false is returned.  If the filter does match
 // the passed transaction, it will also update the filter depending on the bloom
@@ -274,55 +208,9 @@ func (bf *Filter) matchTxAndUpdate(tx *btcutil.Tx) bool {
 	// This is useful for finding transactions when they appear in a block.
 	matched := bf.matches(tx.Sha().Bytes())
 
-	// Check if the filter matches any data elements in the public key
-	// scripts of any of the outputs.  When it does, add the outpoint that
-	// matched so transactions which spend from the matched transaction are
-	// also included in the filter.  This removes the burden of updating the
-	// filter for this scenario from the client.  It is also more efficient
-	// on the network since it avoids the need for another filteradd message
-	// from the client and avoids some potential races that could otherwise
-	// occur.
-	for i, txOut := range tx.MsgTx().TxOut {
-		pushedData, err := txscript.PushedData(txOut.PkScript)
-		if err != nil {
-			continue
-		}
-
-		for _, data := range pushedData {
-			if !bf.matches(data) {
-				continue
-			}
-
-			matched = true
-			bf.maybeAddOutpoint(txOut.PkScript, tx.Sha(), uint32(i))
-			break
-		}
-	}
-
 	// Nothing more to do if a match has already been made.
 	if matched {
 		return true
-	}
-
-	// At this point, the transaction and none of the data elements in the
-	// public key scripts of its outputs matched.
-
-	// Check if the filter matches any outpoints this transaction spends or
-	// any any data elements in the signature scripts of any of the inputs.
-	for _, txin := range tx.MsgTx().TxIn {
-		if bf.matchesOutPoint(&txin.PreviousOutPoint) {
-			return true
-		}
-
-		pushedData, err := txscript.PushedData(txin.SignatureScript)
-		if err != nil {
-			continue
-		}
-		for _, data := range pushedData {
-			if bf.matches(data) {
-				return true
-			}
-		}
 	}
 
 	return false
